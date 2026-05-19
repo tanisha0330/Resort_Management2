@@ -1,0 +1,49 @@
+.room-grid-container {
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom react-calendar styling for the dark theme */
+.react-calendar {
+  width: 100% !important;
+  background: #0B132B !important;
+  color: white !important;
+  border: 2px solid white !important;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+  border-radius: 0 !important;
+  padding: 10px;
+}
+.react-calendar__navigation button {
+  color: white !important;
+  min-width: 44px;
+  background: none;
+  font-size: 16px;
+  margin-top: 8px;
+}
+.react-calendar__navigation button:enabled:hover,
+.react-calendar__navigation button:enabled:focus {
+  background-color: #6E7B9B !important;
+}
+.react-calendar__month-view__weekdays {
+  color: white !important;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+.react-calendar__tile {
+  color: white !important;
+  background: #2A3B5C !important;
+  border: 1px solid #0B132B !important;
+}
+.react-calendar__tile:enabled:hover,
+.react-calendar__tile:enabled:focus {
+  background-color: #6E7B9B !important;
+}
+.react-calendar__tile--now {
+  background: #3b82f6 !important;
+}
+.react-calendar__tile--active {
+  background: white !important;
+  color: #0B132B !important;
+  font-weight: bold;
+}
