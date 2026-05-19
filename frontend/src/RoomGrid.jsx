@@ -49,6 +49,34 @@ const RoomGrid = () => {
     return () => clearInterval(timer);
   }, []);
 
+  // --- REAL-TIME WEBSOCKET LISTENER ---
+  useEffect(() => {
+    // Connect to the Django Daphne server
+    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8000/ws/rooms/';
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log('📡 Connected to Real-Time Hotel Network!');
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.message === 'refresh_rooms') {
+        console.log("🔄 Real-time update received! Refreshing grid...");
+        // This tells React Query to instantly fetch fresh data from the API
+        queryClient.invalidateQueries(['rooms']); 
+      }
+    };
+
+    socket.onclose = () => {
+      console.log('Disconnected from Real-Time Network.');
+    };
+
+    // Cleanup the connection when the component unmounts
+    return () => socket.close();
+  }, [queryClient]);
+  
+
   const handlePrevDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() - 1);
@@ -332,7 +360,7 @@ const RoomGrid = () => {
         />
       )}
 
-      
+
     </div>
   );
 };

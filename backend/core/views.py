@@ -1,3 +1,5 @@
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from django.shortcuts import render
 from rest_framework.decorators import api_view
 from rest_framework import status
@@ -6,9 +8,12 @@ from rest_framework.response import Response
 from .models import Room
 from .serializers import RoomSerializer
 from .models import Room, Guest, Booking, PaymentStatus, RoomStatus
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import permission_classes
 # Create your views here.
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_rooms(request):
     # We will use this date parameter later for advanced booking logic!
     date_param = request.GET.get('date', None) 
@@ -24,6 +29,7 @@ def get_rooms(request):
 
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def book_room(request):
     data = request.data
     
@@ -64,6 +70,15 @@ def book_room(request):
             # 4. Update Room Status
             room.room_status = booked_status
             room.save()
+            # --- BROADCAST TO WEBSOCKETS ---
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                "hotel_staff",
+                {
+                    "type": "send_room_update",
+                    "message": "refresh_rooms"
+                }
+            )
 
             return Response({"message": "Booking successful!"}, status=status.HTTP_201_CREATED)
 
@@ -72,6 +87,7 @@ def book_room(request):
     
 
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def update_room_status(request, room_id):
     try:
         room = Room.objects.get(id=room_id)
@@ -87,3 +103,9 @@ def update_room_status(request, room_id):
         return Response({"error": "Room not found"}, status=status.HTTP_404_NOT_FOUND)
     except RoomStatus.DoesNotExist:
         return Response({"error": "Invalid status"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    
+    
+    
+
+    # ... rest of the code ...
