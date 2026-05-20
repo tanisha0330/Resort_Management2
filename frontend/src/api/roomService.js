@@ -34,3 +34,19 @@ export const submitBooking = async (bookingData) => {
         throw new Error(error.response?.data?.error || "Booking failed");
     }
 };
+
+
+export const bulkCreateRooms = async (count) => {
+    const response = await api.post('/rooms/bulk-create/', { count });
+    return response.data;
+};
+
+export const updateCheckoutDate = async (roomId, checkOutDate) => {
+    const response = await api.post(`/rooms/${roomId}/update-checkout/`, { checkOutDate });
+    return response.data;
+};
+
+export const clearRoomDB = async (roomId) => {
+    const response = await api.post(`/rooms/${roomId}/clear/`);
+    return response.data;
+};

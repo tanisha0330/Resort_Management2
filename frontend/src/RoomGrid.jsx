@@ -1,14 +1,14 @@
-
 import React, { useState, useEffect } from 'react';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css'; 
-import { fetchRoomsForDate, updateRoomStatusInDB } from '../src/api/roomService';
+import { fetchRoomsForDate, updateRoomStatusInDB } from './api/roomService'; 
 import './assets/RoomGrid.css';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+// Modals
 import BookingModal from './BookingModal';
 import ActionModal from './ActionModal';
-
-
+import SettingsModal from './SettingsModal';
 
 const STATUS_CYCLE = ['Available', 'Booked', 'Maintenance', 'Checkin-Pending', 'Checkout-Pending', 'Cleaning'];
 const STATUS_COLORS = {
@@ -24,6 +24,8 @@ const RoomGrid = () => {
   const queryClient = useQueryClient();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
+  
+  // Search States
   const [searchRoomInput, setSearchRoomInput] = useState('');
   const [searchDateInput, setSearchDateInput] = useState('');
   const [activeSearch, setActiveSearch] = useState(null);
@@ -31,11 +33,13 @@ const RoomGrid = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [filterOption, setFilterOption] = useState('All');
 
+  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [selectedRoomForBooking, setSelectedRoomForBooking] = useState(null);
 
-  const [isActionModalOpen, setIsActionModalOpen] = useState(false);
-
+  // Fetch Rooms via React Query
   const { data, isLoading } = useQuery({
     queryKey: ['rooms', selectedDate],
     queryFn: () => fetchRoomsForDate(selectedDate),
@@ -44,39 +48,30 @@ const RoomGrid = () => {
 
   const rooms = data || [];
 
+  // --- REAL-TIME WEBSOCKET LISTENER ---
+  useEffect(() => {
+    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8000/ws/rooms/';
+    const socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => console.log('📡 Connected to Real-Time Hotel Network!');
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.message === 'refresh_rooms') {
+        console.log("🔄 Real-time update received! Refreshing grid...");
+        queryClient.invalidateQueries(['rooms']); 
+      }
+    };
+    socket.onclose = () => console.log('Disconnected from Real-Time Network.');
+    return () => socket.close();
+  }, [queryClient]);
+
+  // Clock
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // --- REAL-TIME WEBSOCKET LISTENER ---
-  useEffect(() => {
-    // Connect to the Django Daphne server
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8000/ws/rooms/';
-    const socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-      console.log('📡 Connected to Real-Time Hotel Network!');
-    };
-
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.message === 'refresh_rooms') {
-        console.log("🔄 Real-time update received! Refreshing grid...");
-        // This tells React Query to instantly fetch fresh data from the API
-        queryClient.invalidateQueries(['rooms']); 
-      }
-    };
-
-    socket.onclose = () => {
-      console.log('Disconnected from Real-Time Network.');
-    };
-
-    // Cleanup the connection when the component unmounts
-    return () => socket.close();
-  }, [queryClient]);
-  
-
+  // Handlers
   const handlePrevDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() - 1);
@@ -89,7 +84,7 @@ const RoomGrid = () => {
     setSelectedDate(newDate);
   };
 
- const handleRoomClick = (roomId) => {
+  const handleRoomClick = (roomId) => {
     const room = rooms.find(r => r.id === roomId);
     if (!room) return;
 
@@ -98,7 +93,7 @@ const RoomGrid = () => {
       setIsModalOpen(true);
     } else {
       setSelectedRoomForBooking(room);
-      setIsActionModalOpen(true); // Open the new Action Modal!
+      setIsActionModalOpen(true);
     }
   };
 
@@ -120,8 +115,9 @@ const RoomGrid = () => {
     setIsSearching(false);
   };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center text-white font-mono">LOADING ROOM DATA...</div>;
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center text-white font-mono bg-[#0B132B]">LOADING ROOM DATA...</div>;
 
+  // Filter Logic
   const filteredMainRooms = rooms.filter(room => {
     if (filterOption === 'All') return true;
     if (filterOption === 'Available') return room.status === 'Available';
@@ -129,6 +125,7 @@ const RoomGrid = () => {
     if (filterOption === 'Maintenance') return room.status === 'Maintenance';
     return true;
   });
+  
   const maintenanceRooms = rooms.filter(r => r.status === 'Maintenance');
   const checkinRooms = rooms.filter(r => r.status === 'Checkin-Pending');
   const checkoutRooms = rooms.filter(r => r.status === 'Checkout-Pending');
@@ -139,17 +136,29 @@ const RoomGrid = () => {
   return (
     <div className="min-h-screen bg-[#0B132B] p-4 text-white font-mono flex flex-col">
       
-      {/* HEADER SECTION WITH COLOR LEGEND */}
+      {/* HEADER SECTION */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-4">
         <h1 className="text-5xl md:text-6xl font-bold tracking-tighter">Room Availability</h1>
         
-        <div className="flex flex-wrap gap-3 text-[10px] md:text-xs font-bold uppercase border-2 border-white p-2 bg-[#6E7B9B]">
-          <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#22c55e]"></div> Available</div>
-          <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#ef4444]"></div> Booked</div>
-          <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#3b82f6]"></div> Check-in Pend</div>
-          <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#a855f7]"></div> Checkout Pend</div>
-          <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#eab308]"></div> Cleaning</div>
-          <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#94a3b8]"></div> Maintenance</div>
+        <div className="flex items-center gap-4">
+          {/* SETTINGS GEAR ICON */}
+          <button 
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="text-2xl hover:text-gray-400 cursor-pointer transition-colors"
+            title="System Settings"
+          >
+            ⚙️
+          </button>
+          
+          {/* COLOR LEGEND */}
+          <div className="flex flex-wrap gap-3 text-[10px] md:text-xs font-bold uppercase border-2 border-white p-2 bg-[#6E7B9B]">
+            <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#22c55e]"></div> Available</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#ef4444]"></div> Booked</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#3b82f6]"></div> Check-in Pend</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#a855f7]"></div> Checkout Pend</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#eab308]"></div> Cleaning</div>
+            <div className="flex items-center gap-2"><div className="w-4 h-4 border border-white bg-[#94a3b8]"></div> Maintenance</div>
+          </div>
         </div>
       </div>
 
@@ -204,13 +213,22 @@ const RoomGrid = () => {
                   </span>
                 </div>
               ) : (
-                <div className="grid grid-cols-8 gap-1 flex-1 content-start overflow-y-auto pr-1" style={{ maxHeight: '400px' }}>
+                <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2 flex-1 content-start overflow-y-auto pr-1" style={{ maxHeight: '400px' }}>
                   {filteredMainRooms.map(room => (
                     <div key={room.id} 
                       onClick={() => handleRoomClick(room.id)}
-                      className={`h-10 border-2 border-white flex items-center justify-center text-[10px] font-bold transition-transform hover:scale-105 cursor-pointer ${STATUS_COLORS[room.status]}`}
+                      className={`w-full min-h-[50px] p-1 border-2 border-white flex flex-col items-center justify-center text-[10px] font-bold transition-transform hover:scale-105 cursor-pointer overflow-hidden ${STATUS_COLORS[room.status]}`}
                       title={`Guest: ${room.guest} | Details: ${room.details}`}>
-                      {room.roomNumber}
+                      
+                      <span>{room.roomNumber}</span>
+                      
+                      {/* Tidy, truncated text so it never breaks your boxes again! */}
+                      {room.bookedTill && room.status === 'Booked' && (
+                        <span className="text-[6px] font-bold mt-1 text-center leading-tight bg-black/40 px-1 py-[2px] rounded w-full truncate text-white">
+                          {room.bookedTill.toUpperCase()}
+                        </span>
+                      )}
+                      
                     </div>
                   ))}
                 </div>
@@ -305,7 +323,7 @@ const RoomGrid = () => {
               {isSearching ? 'SEARCHING...' : 'DONE'}
             </button>
 
-            {/* DYNAMIC RESULTS BOX - ASYNC API READY */}
+            {/* DYNAMIC RESULTS BOX */}
             {activeSearch && (
               <div className="bg-[#0B132B] border-2 border-white p-4 text-[10px] font-bold space-y-2 mt-2 transition-all">
                 <p className="text-yellow-400 mb-2 border-b-2 border-yellow-400 pb-1">RESULT FOR : {activeSearch.roomNum}</p>
@@ -322,11 +340,11 @@ const RoomGrid = () => {
                       <>
                         <p className="border-b-2 border-white pb-1">Date: {activeSearch.displayDate}</p>
                         <p className="border-b-2 border-white pb-1">Status: {foundRoom.status}</p>
-                        <p className="border-b-2 border-white pb-1">Guest: {foundRoom.guest}</p>
+                        <p className="border-b-2 border-white pb-1">Guest: {foundRoom.guest || 'None'}</p>
                         <p className="border-b-2 border-white pb-1">Notes: {foundRoom.details}</p>
                       </>
                     ) : (
-                      <p className="border-b-2 border-red-400 pb-1 text-red-400">Room Not Found (Enter A001-A062)</p>
+                      <p className="border-b-2 border-red-400 pb-1 text-red-400">Room Not Found</p>
                     );
                   })()
                 ) : null}
@@ -335,7 +353,8 @@ const RoomGrid = () => {
           </div>
         </div>
       </div>
-      {/* RENDER MODAL IF OPEN */}
+
+      {/* RENDER MODALS */}
       {isModalOpen && (
         <BookingModal 
           room={selectedRoomForBooking} 
@@ -343,13 +362,12 @@ const RoomGrid = () => {
           onClose={() => setIsModalOpen(false)}
           onSuccess={() => {
             setIsModalOpen(false);
-            queryClient.invalidateQueries(['rooms', selectedDate]); // This instantly refreshes the grid!
+            queryClient.invalidateQueries(['rooms', selectedDate]); 
           }}
         />
       )}
 
-      {/* RENDER ACTION MODAL IF OPEN */}
-      {isActionModalOpen && (
+    {isActionModalOpen && (
         <ActionModal 
           room={selectedRoomForBooking} 
           onClose={() => setIsActionModalOpen(false)}
@@ -357,9 +375,23 @@ const RoomGrid = () => {
             setIsActionModalOpen(false);
             queryClient.invalidateQueries(['rooms', selectedDate]);
           }}
+          // NEW: If they click Booked, close this modal and open the Booking Form!
+          onBookClick={() => {
+            setIsActionModalOpen(false);
+            setIsModalOpen(true);
+          }}
         />
       )}
 
+      {isSettingsModalOpen && (
+        <SettingsModal 
+          onClose={() => setIsSettingsModalOpen(false)}
+          onSuccess={() => {
+            setIsSettingsModalOpen(false);
+            queryClient.invalidateQueries(['rooms']);
+          }}
+        />
+      )}
 
     </div>
   );
